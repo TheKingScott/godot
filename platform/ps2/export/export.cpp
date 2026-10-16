@@ -75,6 +75,9 @@ void register_ps2_exporter() {
 	// the PS2 catalog), the export falls back to the keyword tape with a warning,
 	// or fails when this is on.
 	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "ps2/scripts/require_compiled"), false);
+	// Sound effects cooked into SFX00 as a bank, in this order; PS2.play_sfx()
+	// takes an index or one of these paths. Empty: the first .wav in the project.
+	GLOBAL_DEF(PropertyInfo(Variant::PACKED_STRING_ARRAY, "ps2/audio/sfx_bank", PROPERTY_HINT_TYPE_STRING, vformat("%d/%d:*.wav", Variant::STRING, PROPERTY_HINT_FILE)), PackedStringArray());
 
 	EDITOR_DEF("export/ps2/toolchain", "");
 	EditorSettings::get_singleton()->add_property_hint(PropertyInfo(Variant::STRING, "export/ps2/toolchain", PROPERTY_HINT_GLOBAL_FILE, "*.exe,*.bin,*"));

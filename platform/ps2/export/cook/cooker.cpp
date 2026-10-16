@@ -2607,10 +2607,33 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 		SfxBlob sfx;
 		Vector<int16_t> pcm;
 		int rate = 22050;
-		Ref<AudioStreamWAV> wav;
-		walk_first_wav("res://", wav);
-		pcm_from_wav(wav, pcm, rate);
-		if (write_sfx_pcm(pcm, rate, sfx) != OK) {
+		const PackedStringArray bank = GLOBAL_GET("ps2/audio/sfx_bank");
+		Error serr = OK;
+		if (!bank.is_empty()) {
+			// the project's sound list, in order: PS2.play_sfx(i) / ("res://...")
+			Vector<SfxClip> clips;
+			for (int i = 0; i < bank.size(); i++) {
+				SfxClip clip;
+				Ref<AudioStreamWAV> bw;
+				if (ResourceLoader::exists(bank[i])) {
+					bw = ResourceLoader::load(bank[i]);
+				}
+				pcm_from_wav(bw, clip.pcm, clip.sample_rate);
+				if (clip.pcm.is_empty()) {
+					r_out.warnings.push_back(vformat("ps2/audio/sfx_bank[%d] %s is not a 8/16-bit PCM .wav (re-import with compression off); it plays as silence.", i, bank[i]));
+					clip.pcm.resize(64);
+					clip.pcm.fill(0);
+				}
+				clips.push_back(clip);
+			}
+			serr = write_sfx_bank(clips, sfx);
+		} else {
+			Ref<AudioStreamWAV> wav;
+			walk_first_wav("res://", wav);
+			pcm_from_wav(wav, pcm, rate);
+			serr = write_sfx_pcm(pcm, rate, sfx);
+		}
+		if (serr != OK) {
 			r_out.errors.push_back("SFX cook failed.");
 			r_out.report = r_out.errors[r_out.errors.size() - 1];
 			free_live();

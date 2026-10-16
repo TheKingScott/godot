@@ -29,6 +29,8 @@
 
 #include "gdir_compile.h"
 
+#include "core/config/project_settings.h"
+
 #include "gdir_ops.h"
 
 #include "modules/modules_enabled.gen.h" // For gdscript.
@@ -963,6 +965,31 @@ public:
 					return;
 				}
 				if (!check_argc(c, s)) {
+					return;
+				}
+				if (s->id == GN_PS2_PLAY_SFX && c->arguments.size() >= 1) {
+					// The bank is cooked in ps2/audio/sfx_bank order, so a sound's
+					// name resolves to its index here: a full res:// path or the
+					// file name without ".wav" ("bolt").
+					const P::ExpressionNode *a0 = c->arguments[0];
+					if (!a0->is_constant || (a0->reduced_value.get_type() != Variant::STRING && a0->reduced_value.get_type() != Variant::STRING_NAME)) {
+						err(c, "PS2.play_sfx() needs a constant sound name on PS2");
+						return;
+					}
+					const String want = a0->reduced_value;
+					const PackedStringArray bank = GLOBAL_GET("ps2/audio/sfx_bank");
+					int found = -1;
+					for (int i = 0; i < bank.size() && found < 0; i++) {
+						if (bank[i] == want || bank[i].get_file().get_basename() == want) {
+							found = i;
+						}
+					}
+					if (found < 0) {
+						err(c, vformat("PS2.play_sfx(\"%s\"): not in Project Settings ps2/audio/sfx_bank", want));
+						return;
+					}
+					op16(GOP_CONST, k->add(found));
+					native(GN_PS2_PLAY_SFX, 1);
 					return;
 				}
 				args(c);
