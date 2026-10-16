@@ -12,14 +12,14 @@
 #pragma once
 
 #include "core/input/shortcut.h"
+#include "core/io/marshalls.h"
 #include "core/math/color.h"
 #include "core/math/vector2.h"
 #include "core/math/vector3.h"
 #include "core/object/object.h"
+#include "core/object/object_id.h"
 #include "core/string/node_path.h"
 #include "core/string/ustring.h"
-#include "core/object/object_id.h"
-#include "core/io/marshalls.h"
 #include "core/variant/dictionary.h"
 #include "core/variant/variant.h"
 #include "editor/plugins/editor_plugin.h"
@@ -715,6 +715,15 @@ public:
 		_fail_ps2();
 		(void)p_off;
 		return 0;
+	}
+	// GS distance fog on the PS2: colour, then linear from near to far view
+	// depth. No arguments (or far <= near) turns it off.
+	bool set_fog(const Color &p_color = Color(), float p_near = 0.0f, float p_far = 0.0f) {
+		_fail_ps2();
+		(void)p_color;
+		(void)p_near;
+		(void)p_far;
+		return false;
 	}
 	PackedByteArray godot_save_bytes(const Variant &p_v) const {
 		int len = 0;

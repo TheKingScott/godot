@@ -349,6 +349,7 @@ static const NativeSig kPS2[] = {
 	{ "say", GN_PS2_SAY, 1, 2 },
 	{ "poke", GN_PS2_POKE, 2, 2 },
 	{ "peek", GN_PS2_PEEK, 1, 1 },
+	{ "set_fog", GN_PS2_SET_FOG, 0, 3 },
 };
 
 static const NativeSig *find_sig(const NativeSig *p_table, int p_n, const String &p_name) {

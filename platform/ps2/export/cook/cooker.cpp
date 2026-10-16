@@ -42,11 +42,13 @@
 #include "core/io/resource_loader.h"
 #include "core/math/quaternion.h"
 #include "core/object/script_language.h"
+#include "core/templates/hash_set.h"
 #include "core/variant/variant.h"
 #include "scene/3d/camera_3d.h"
 #include "scene/3d/importer_mesh_instance_3d.h"
 #include "scene/3d/light_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
+#include "scene/3d/multimesh_instance_3d.h"
 #include "scene/3d/node_3d.h"
 #include "scene/3d/path_3d.h"
 #include "scene/3d/world_environment.h"
@@ -80,6 +82,7 @@ static const char *kAllowed[] = {
 	"Node2D",
 	"Node3D",
 	"MeshInstance3D",
+	"MultiMeshInstance3D",
 	"ImporterMeshInstance3D",
 	"Camera3D",
 	"AnimationPlayer",
@@ -230,6 +233,17 @@ struct Gather {
 		String text;
 	};
 	Vector<HudRow> hud;
+	// MultiMeshInstance3D: the mesh is cooked once (node = the instance
+	// node); every instance is a 3x4 delta from that cooked copy, drawn by
+	// the guest with the node's matrix swapped in. MESH trailer 'INST'.
+	struct InstRow {
+		int node_id = -1;
+		Transform3D delta;
+	};
+	Vector<InstRow> insts;
+	HashSet<int> inst_src;
+	// Nodes whose material has Disable Fog. MESH trailer 'NFOG'.
+	HashSet<int> nofog;
 	struct TileRow {
 		int16_t x = 0;
 		int16_t y = 0;
@@ -897,9 +911,15 @@ static void emit_mesh(Gather &r_g, const Ref<Mesh> &p_mesh, const Transform3D &p
 		Ref<Material> mat;
 		if (MeshInstance3D *mi = Object::cast_to<MeshInstance3D>(p_owner)) {
 			mat = mi->get_active_material(s);
+		} else if (GeometryInstance3D *gi = Object::cast_to<GeometryInstance3D>(p_owner)) {
+			mat = gi->get_material_override();
 		}
 		if (mat.is_null()) {
 			mat = p_mesh->surface_get_material(s);
+		}
+		const Ref<BaseMaterial3D> bm = mat;
+		if (bm.is_valid() && bm->get_flag(BaseMaterial3D::FLAG_DISABLE_FOG)) {
+			r_g.nofog.insert(p_my);
 		}
 		Color base;
 		Color emit;
@@ -1632,6 +1652,26 @@ static void walk_scene(Node *p_node, Gather &r_g, int p_parent, const String &p_
 			}
 		}
 	}
+	if (MultiMeshInstance3D *mmi = Object::cast_to<MultiMeshInstance3D>(p_node)) {
+		const Ref<MultiMesh> mm = mmi->get_multimesh();
+		if (mm.is_valid() && mm->get_mesh().is_valid() && mm->get_transform_format() == MultiMesh::TRANSFORM_3D && my >= 0) {
+			const Transform3D xf = world_xform(mmi);
+			const Transform3D inv = xf.affine_inverse();
+			emit_mesh(r_g, mm->get_mesh(), xf, my, mmi);
+			r_g.inst_src.insert(my);
+			const int count = mm->get_visible_instance_count() >= 0 ? MIN(mm->get_visible_instance_count(), mm->get_instance_count()) : mm->get_instance_count();
+			for (int i = 0; i < count; i++) {
+				const Transform3D t = mm->get_instance_transform(i);
+				if (Math::abs(t.basis.determinant()) < 1e-6f) {
+					continue; // scaled to nothing: a placement that was left out
+				}
+				Gather::InstRow row;
+				row.node_id = my;
+				row.delta = xf * t * inv;
+				r_g.insts.push_back(row);
+			}
+		}
+	}
 	if (ImporterMeshInstance3D *imi = Object::cast_to<ImporterMeshInstance3D>(p_node)) {
 		if (imi->get_mesh().is_valid() && my >= 0) {
 			const Transform3D xf = world_xform(imi);
@@ -1742,6 +1782,67 @@ static void ensure_placeholder_tex(Gather &r_g) {
 	r_g.image_names.push_back("placeholder");
 }
 
+// Optional sections after MESH's index list (guests that predate them stop
+// reading at the indices):
+//   'INST' u32 n, n x { u16 node, u16 0, f32 m[12] }  row-major 3x4 delta
+//   'NFOG' u32 n, n x u16 node, padded to 4 bytes
+static void append_mesh_extras(const Gather &p_g, MeshBlob &r_mesh) {
+	Vector<uint8_t> &o = r_mesh.bytes;
+	if (!p_g.insts.is_empty() || !p_g.inst_src.is_empty()) {
+		o.push_back('I');
+		o.push_back('N');
+		o.push_back('S');
+		o.push_back('T');
+		append_u32(o, uint32_t(p_g.insts.size()));
+		for (const Gather::InstRow &r : p_g.insts) {
+			append_u16(o, uint16_t(r.node_id));
+			append_u16(o, 0);
+			const Basis &b = r.delta.basis;
+			for (int row = 0; row < 3; row++) {
+				append_f32(o, b.rows[row].x);
+				append_f32(o, b.rows[row].y);
+				append_f32(o, b.rows[row].z);
+				append_f32(o, r.delta.origin[row]);
+			}
+		}
+		// a source with no instances left still has to stay hidden
+		for (const int n : p_g.inst_src) {
+			bool used = false;
+			for (const Gather::InstRow &r : p_g.insts) {
+				if (r.node_id == n) {
+					used = true;
+					break;
+				}
+			}
+			if (!used) {
+				o.push_back('I');
+				o.push_back('N');
+				o.push_back('S');
+				o.push_back('T');
+				append_u32(o, 1);
+				append_u16(o, uint16_t(n));
+				append_u16(o, 0);
+				for (int k = 0; k < 12; k++) {
+					append_f32(o, 0.0f); // all-zero matrix: drawn as nothing
+				}
+			}
+		}
+	}
+	if (!p_g.nofog.is_empty()) {
+		o.push_back('N');
+		o.push_back('F');
+		o.push_back('O');
+		o.push_back('G');
+		append_u32(o, uint32_t(p_g.nofog.size()));
+		for (const int n : p_g.nofog) {
+			append_u16(o, uint16_t(n));
+		}
+		if (p_g.nofog.size() & 1) {
+			append_u16(o, 0);
+		}
+	}
+}
+
 static Error cook_gather_bins(const String &p_node, const String &p_mesh, const String &p_gtex, Gather &p_g, String &r_err, uint32_t *r_ee, uint32_t *r_gs) {
 	ensure_placeholder_tex(p_g);
 	const Vector<uint8_t> node_blob = write_node_blob(p_g);
@@ -1751,6 +1852,7 @@ static Error cook_gather_bins(const String &p_node, const String &p_mesh, const 
 		r_err = "MESH cook failed.";
 		return merr;
 	}
+	append_mesh_extras(p_g, mesh);
 	Vector<GsTex> texs;
 	for (int i = 0; i < p_g.images.size(); i++) {
 		GsTex one;
@@ -2454,6 +2556,7 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 		free_live();
 		return merr;
 	}
+	append_mesh_extras(gathered, mesh);
 
 	Vector<GsTex> texs;
 	int tex_vram = 0;
@@ -2728,7 +2831,7 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 		r_out.warnings.push_back("Kit volumes fire on HIT enter (overlap kit, not Cross-only). CharacterBody2D/3D cook as player kit 4 and auto-slide. export/guest is the resolved tree (embed + overlay + extra/*.cpp).");
 		r_out.warnings.push_back("Spawn teleports from NODE xyz. Checkpoint stores xyz (not memcard). Start pauses. Button HUD text action|label (pause/save/load/respawn/say/portal). Gravity+jump when no HUD focus.");
 		r_out.warnings.push_back("PS2.overlaps / raycast / tile_solid_at query HIT00 AABBs and TILE00 cells. spawn_shot stays refused.");
-		r_out.warnings.push_back("PS2.set_fade / change_scene_fade are a GS alpha overlay (not set_fog). spawn_shot stays refused.");
+		r_out.warnings.push_back("PS2.set_fade / change_scene_fade are a GS alpha overlay; PS2.set_fog is GS distance fog. spawn_shot stays refused.");
 		r_out.warnings.push_back("play_xa is not supported on PS2 ABI 1 (no CD-XA; use PS2.play_sfx / load_music IMA). play_fmv has no license-clean IPU decoder.");
 		r_out.warnings.push_back("Button HUD slots use D-pad focus and ui_accept (Cross). Not Godot theme/CSS. Overflow drops extras (16 slots).");
 		r_out.warnings.push_back("WAV-only audio cook (IMA then VAG). STR/XA encode is refused.");

@@ -21,10 +21,10 @@
 #include "core/os/os.h"
 #include "core/templates/hash_set.h"
 #include "editor/editor_interface.h"
+#include "scene/2d/camera_2d.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/2d/tile_map.h"
 #include "scene/2d/tile_map_layer.h"
-#include "scene/2d/camera_2d.h"
 #include "scene/3d/camera_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/3d/physics/collision_object_3d.h"
@@ -162,6 +162,7 @@ void PS2::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_flip", "node", "flip"), &PS2::set_flip);
 	ClassDB::bind_method(D_METHOD("poke", "off", "byte"), &PS2::poke);
 	ClassDB::bind_method(D_METHOD("peek", "off"), &PS2::peek);
+	ClassDB::bind_method(D_METHOD("set_fog", "color", "near", "far"), &PS2::set_fog, DEFVAL(Color()), DEFVAL(0.0f), DEFVAL(0.0f));
 	ClassDB::bind_method(D_METHOD("godot_save_bytes", "value"), &PS2::godot_save_bytes);
 	ClassDB::bind_method(D_METHOD("godot_load_bytes", "bytes"), &PS2::godot_load_bytes);
 	ClassDB::bind_method(D_METHOD("move_6dof", "node", "ax", "ay", "az", "pitch", "yaw", "roll", "speed"), &PS2::move_6dof);
@@ -436,7 +437,7 @@ void PS2FlavorEditorPlugin::_refresh() {
 	const String bios = OS::get_singleton() ? String(OS::get_singleton()->get_environment("PS2_BIOS_DIR")) : String();
 	const String oneclick = bios.is_empty() ? "One-click disabled: set PS2_BIOS_DIR to a legal BIOS folder (export does not need BIOS)." : "One-click: PS2_BIOS_DIR is set (ps2 run / PCSX2 -elf).";
 	status->set_text(vformat(
-			"nodes %d/%d\ntris %d/%d\ntextures %d/%d\ncameras %d/%d\nHIT %d/%d\nHUD %d/%d\ntiles %d\ncatalog extras %d/%d (resident max %d + pack 0)\nest EE %d/%d  GS %d/%d\nEE 24 MiB and GS 4 MiB are shared. Extra STREAM packs cap at 2 MiB EE. Unload rooms/NPCs you are not using.\nPS2.* is PS2 export only; use OS.has_feature(\"ps2\").\nWorks: STREAM host:/cdrom0:, HIT, camera2D/3D, 6DoF/vehicle, CPU particles, nav/path, 16 tweens, IMA SFX/MUSIC, set_fade, DISP.\nPartial: change_scene swap / load_scene+instantiate additive, Button HUD, AnimationPlayer TRS, custom IR.\nRefused: play_xa, play_fmv, set_fog, spawn_shot, memcard_wrap, gsKit, official VMs, live GPUParticles/RigidBody.\n%s",
+			"nodes %d/%d\ntris %d/%d\ntextures %d/%d\ncameras %d/%d\nHIT %d/%d\nHUD %d/%d\ntiles %d\ncatalog extras %d/%d (resident max %d + pack 0)\nest EE %d/%d  GS %d/%d\nEE 24 MiB and GS 4 MiB are shared. Extra STREAM packs cap at 2 MiB EE. Unload rooms/NPCs you are not using.\nPS2.* is PS2 export only; use OS.has_feature(\"ps2\").\nWorks: STREAM host:/cdrom0:, HIT, camera2D/3D, 6DoF/vehicle, CPU particles, nav/path, 16 tweens, IMA SFX/MUSIC, set_fade, set_fog, MultiMesh instances, DISP.\nPartial: change_scene swap / load_scene+instantiate additive, Button HUD, AnimationPlayer TRS, custom IR.\nRefused: play_xa, play_fmv, spawn_shot, memcard_wrap, gsKit, official VMs, live GPUParticles/RigidBody.\n%s",
 			nodes, ps2_cook::kMaxNodes, tris, ps2_cook::kMaxTris, tex, ps2_cook::kMaxTextures,
 			cams, ps2_cook::kMaxCameras, hits, ps2_cook::kMaxHits, hud, ps2_cook::kMaxHud, tiles,
 			extras, ps2_cook::kMaxScenePacks, ps2_cook::kMaxResidentExtras,
