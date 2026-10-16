@@ -2,11 +2,29 @@
 /*  export.cpp                                                            */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                               BLAZIUM                                  */
-/*                        https://blazium.app                             */
+/*                             BLAZIUM ENGINE                             */
+/*                          https://blazium.app                           */
 /**************************************************************************/
 /* Copyright (c) 2024-present Blazium Engine contributors.                */
-/* SPDX-License-Identifier: MIT                                           */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
 #include "export.h"
@@ -53,6 +71,10 @@ static void _ps2_flavor_init() {
 void register_ps2_exporter() {
 #if defined(WINDOWS_ENABLED) || defined(LINUXBSD_ENABLED)
 	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "ps2/enabled"), false);
+	// Scripts on cooked nodes compile to GDIR; when one cannot (an API outside
+	// the PS2 catalog), the export falls back to the keyword tape with a warning,
+	// or fails when this is on.
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "ps2/scripts/require_compiled"), false);
 
 	EDITOR_DEF("export/ps2/toolchain", "");
 	EditorSettings::get_singleton()->add_property_hint(PropertyInfo(Variant::STRING, "export/ps2/toolchain", PROPERTY_HINT_GLOBAL_FILE, "*.exe,*.bin,*"));

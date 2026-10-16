@@ -2,45 +2,73 @@
 /*  cooker.cpp                                                            */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                               BLAZIUM                                  */
-/*                        https://blazium.app                             */
+/*                             BLAZIUM ENGINE                             */
+/*                          https://blazium.app                           */
 /**************************************************************************/
 /* Copyright (c) 2024-present Blazium Engine contributors.                */
-/* SPDX-License-Identifier: MIT                                           */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
 #include "cooker.h"
 
 #include "adpcm_writer.h"
+#include "gdir_compile.h"
 #include "gs_tex_writer.h"
 #include "mesh_writer.h"
 #include "script_cook.h"
 
 #include "core/config/project_settings.h"
-#include "core/variant/variant.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/image.h"
 #include "core/io/resource_loader.h"
+#include "core/math/quaternion.h"
+#include "core/object/script_language.h"
+#include "core/variant/variant.h"
 #include "scene/3d/camera_3d.h"
 #include "scene/3d/importer_mesh_instance_3d.h"
+#include "scene/3d/light_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/3d/node_3d.h"
 #include "scene/3d/path_3d.h"
+#include "scene/3d/world_environment.h"
 #include "scene/animation/animation_player.h"
-#include "scene/main/node.h"
 #include "scene/gui/button.h"
 #include "scene/gui/color_rect.h"
+#include "scene/gui/control.h"
 #include "scene/gui/label.h"
 #include "scene/gui/texture_button.h"
-#include "core/math/quaternion.h"
-#include "scene/resources/animation.h"
-#include "scene/resources/curve.h"
+#include "scene/main/canvas_layer.h"
+#include "scene/main/node.h"
 #include "scene/resources/3d/importer_mesh.h"
+#include "scene/resources/3d/sky_material.h"
+#include "scene/resources/animation.h"
 #include "scene/resources/audio_stream_wav.h"
+#include "scene/resources/curve.h"
+#include "scene/resources/environment.h"
 #include "scene/resources/material.h"
 #include "scene/resources/mesh.h"
 #include "scene/resources/packed_scene.h"
+#include "scene/resources/sky.h"
+#include "scene/resources/style_box_flat.h"
 #include "scene/resources/texture.h"
 
 #include <cstring>
@@ -48,24 +76,78 @@
 namespace ps2_cook {
 
 static const char *kAllowed[] = {
-	"Node", "Node2D", "Node3D", "MeshInstance3D", "ImporterMeshInstance3D",
-	"Camera3D", "AnimationPlayer", "Skeleton3D", "BoneAttachment3D",
-	"WorldEnvironment", "Marker3D",
-	"DirectionalLight3D", "OmniLight3D", "SpotLight3D", "Light3D",
-	"AudioStreamPlayer", "AudioStreamPlayer3D", "AudioStreamPlayer2D",
-	"Control", "CanvasLayer", "Label", "ColorRect", "Button", "TextureButton",
-	"Path3D", "PathFollow3D", "Path2D", "PathFollow2D",
-	"Sprite2D", "AnimatedSprite2D", "Sprite3D", "Camera2D", "Marker2D",
-	"TileMap", "TileMapLayer",
-	"Area2D", "Area3D", "CollisionShape2D", "CollisionShape3D",
-	"CharacterBody2D", "CharacterBody3D", "StaticBody2D", "StaticBody3D",
-	"CPUParticles2D", "CPUParticles3D", "GPUParticles2D", "GPUParticles3D",
-	"NavigationRegion2D", "NavigationRegion3D", "NavigationAgent2D", "NavigationAgent3D",
-	"VehicleBody3D", "VehicleWheel3D",
-	"PS2Spawner", "PS2CameraVolume", "PS2Follow", "PS2Waypoint", "PS2Path",
-	"PS2NavRegion", "PS2Vehicle", "PS2Particles", "PS2Tween",
-	"PS2SpawnPoint", "PS2Checkpoint", "PS2Portal", "PS2SavePoint", "PS2MusicZone",
-	"PS2LoadZone", "PS2UnloadZone", "PS2Hazard", "PS2Pickup", "PS2Talk",
+	"Node",
+	"Node2D",
+	"Node3D",
+	"MeshInstance3D",
+	"ImporterMeshInstance3D",
+	"Camera3D",
+	"AnimationPlayer",
+	"Skeleton3D",
+	"BoneAttachment3D",
+	"WorldEnvironment",
+	"Marker3D",
+	"DirectionalLight3D",
+	"OmniLight3D",
+	"SpotLight3D",
+	"Light3D",
+	"AudioStreamPlayer",
+	"AudioStreamPlayer3D",
+	"AudioStreamPlayer2D",
+	"Control",
+	"CanvasLayer",
+	"Label",
+	"ColorRect",
+	"Button",
+	"TextureButton",
+	"Path3D",
+	"PathFollow3D",
+	"Path2D",
+	"PathFollow2D",
+	"Sprite2D",
+	"AnimatedSprite2D",
+	"Sprite3D",
+	"Camera2D",
+	"Marker2D",
+	"TileMap",
+	"TileMapLayer",
+	"Area2D",
+	"Area3D",
+	"CollisionShape2D",
+	"CollisionShape3D",
+	"CharacterBody2D",
+	"CharacterBody3D",
+	"StaticBody2D",
+	"StaticBody3D",
+	"CPUParticles2D",
+	"CPUParticles3D",
+	"GPUParticles2D",
+	"GPUParticles3D",
+	"NavigationRegion2D",
+	"NavigationRegion3D",
+	"NavigationAgent2D",
+	"NavigationAgent3D",
+	"VehicleBody3D",
+	"VehicleWheel3D",
+	"PS2Spawner",
+	"PS2CameraVolume",
+	"PS2Follow",
+	"PS2Waypoint",
+	"PS2Path",
+	"PS2NavRegion",
+	"PS2Vehicle",
+	"PS2Particles",
+	"PS2Tween",
+	"PS2SpawnPoint",
+	"PS2Checkpoint",
+	"PS2Portal",
+	"PS2SavePoint",
+	"PS2MusicZone",
+	"PS2LoadZone",
+	"PS2UnloadZone",
+	"PS2Hazard",
+	"PS2Pickup",
+	"PS2Talk",
 };
 
 static bool type_allowed(const String &p_cls) {
@@ -136,6 +218,7 @@ struct Gather {
 	Vector<SpriteRow> sprites;
 	Vector<HitRow> hits;
 	struct HudRow {
+		int node_id = -1;
 		int16_t x = 8;
 		int16_t y = 8;
 		int16_t w = 64;
@@ -206,6 +289,32 @@ struct Gather {
 		float wz[4] = { 0.6f, 0.6f, -0.6f, -0.6f };
 	};
 	Vector<VehlRow> vehls;
+	// Scripts (GDIR) and lighting.
+	Vector<GdirNode> gnodes;
+	struct PendingConn {
+		int src = -1;
+		String signal;
+		Node *target = nullptr;
+		String method;
+	};
+	Vector<PendingConn> pending_conns;
+	HashMap<Node *, int> node_ids;
+	bool has_clear = false;
+	Color clear;
+	int camera_node = -1;
+	float camera_fov = 70.0f;
+	struct LightRow {
+		int type = 0; // 0 directional, 1 omni, 2 spot
+		Vector3 pos;
+		Vector3 dir; // towards the light (directional)
+		Color color;
+		float energy = 1.0f;
+		float range = 5.0f;
+		float atten = 1.0f;
+	};
+	Vector<LightRow> light_rows;
+	Color ambient = Color(0, 0, 0);
+	bool lit = false;
 	Vector<String> errors;
 	Vector<String> warnings;
 	int node_dropped = 0;
@@ -535,26 +644,6 @@ static Ref<Image> image_from_texture(const Ref<Texture2D> &p_tex) {
 	return Ref<Image>();
 }
 
-static Ref<Image> image_from_material(const Ref<Material> &p_mat, String &r_name) {
-	const Ref<BaseMaterial3D> std = p_mat;
-	if (std.is_null()) {
-		return Ref<Image>();
-	}
-	const Ref<Texture2D> tex = std->get_texture(BaseMaterial3D::TEXTURE_ALBEDO);
-	if (tex.is_valid()) {
-		r_name = tex->get_path();
-		if (r_name.is_empty()) {
-			r_name = tex->get_name();
-		}
-		return image_from_texture(tex);
-	}
-	const Color c = std->get_albedo();
-	r_name = vformat("albedo_%08x", c.to_rgba32());
-	Ref<Image> solid = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
-	solid->fill(c);
-	return solid;
-}
-
 static uint16_t register_image(Gather &r_g, const Ref<Image> &p_img, const String &p_name) {
 	if (p_img.is_null() || p_img->is_empty()) {
 		return 0;
@@ -575,8 +664,18 @@ static uint16_t register_image(Gather &r_g, const Ref<Image> &p_img, const Strin
 	return uint16_t(r_g.images.size() - 1);
 }
 
-static void emit_tris(Gather &r_g, const PackedVector3Array &verts, const PackedVector2Array &uvs, const PackedInt32Array &idx, uint16_t p_tex, uint16_t p_node) {
-	auto push_tri = [&](const Vector3 &a, const Vector3 &b, const Vector3 &c, const Vector2 &ua, const Vector2 &ub, const Vector2 &uc) {
+static void emit_tris(Gather &r_g, const PackedVector3Array &verts, const PackedVector2Array &uvs, const PackedInt32Array &idx, uint16_t p_tex, uint16_t p_node, const PackedColorArray &p_cols = PackedColorArray()) {
+	auto rgb_of = [&](int i, uint8_t *o) {
+		if (i >= 0 && i < p_cols.size()) {
+			const Color c = p_cols[i];
+			o[0] = uint8_t(CLAMP(int(c.r * 255.0f + 0.5f), 0, 255));
+			o[1] = uint8_t(CLAMP(int(c.g * 255.0f + 0.5f), 0, 255));
+			o[2] = uint8_t(CLAMP(int(c.b * 255.0f + 0.5f), 0, 255));
+		} else {
+			o[0] = o[1] = o[2] = 255;
+		}
+	};
+	auto push_tri = [&](int ia, int ib, int ic, const Vector3 &a, const Vector3 &b, const Vector3 &c, const Vector2 &ua, const Vector2 &ub, const Vector2 &uc) {
 		if (r_g.tris.size() >= kMaxTris) {
 			r_g.tri_dropped++;
 			return;
@@ -588,6 +687,9 @@ static void emit_tris(Gather &r_g, const PackedVector3Array &verts, const Packed
 		t.uv[0] = ua;
 		t.uv[1] = ub;
 		t.uv[2] = uc;
+		rgb_of(ia, t.rgb[0]);
+		rgb_of(ib, t.rgb[1]);
+		rgb_of(ic, t.rgb[2]);
 		t.tex_slot = p_tex;
 		t.node_id = p_node;
 		r_g.tris.push_back(t);
@@ -600,7 +702,7 @@ static void emit_tris(Gather &r_g, const PackedVector3Array &verts, const Packed
 			if (i0 < 0 || i1 < 0 || i2 < 0 || i0 >= verts.size() || i1 >= verts.size() || i2 >= verts.size()) {
 				continue;
 			}
-			push_tri(verts[i0], verts[i1], verts[i2],
+			push_tri(i0, i1, i2, verts[i0], verts[i1], verts[i2],
 					i0 < uvs.size() ? uvs[i0] : Vector2(),
 					i1 < uvs.size() ? uvs[i1] : Vector2(),
 					i2 < uvs.size() ? uvs[i2] : Vector2());
@@ -608,24 +710,172 @@ static void emit_tris(Gather &r_g, const PackedVector3Array &verts, const Packed
 		return;
 	}
 	for (int i = 0; i + 2 < verts.size(); i += 3) {
-		push_tri(verts[i], verts[i + 1], verts[i + 2],
+		push_tri(i, i + 1, i + 2, verts[i], verts[i + 1], verts[i + 2],
 				i < uvs.size() ? uvs[i] : Vector2(),
 				i + 1 < uvs.size() ? uvs[i + 1] : Vector2(1, 0),
 				i + 2 < uvs.size() ? uvs[i + 2] : Vector2(0, 1));
 	}
 }
 
+// Lights and environment of a scene, gathered before its meshes so vertex
+// colors can carry baked lighting (the guest draws textures MODULATEd by
+// vertex colour; there are no runtime lights on PS2 ABI 1).
+static void collect_lights(Node *p_node, Gather &r_g) {
+	if (!p_node) {
+		return;
+	}
+	if (Light3D *l = Object::cast_to<Light3D>(p_node)) {
+		if (l->is_visible()) {
+			Gather::LightRow row;
+			const Transform3D xf = world_xform(l);
+			row.color = l->get_color();
+			row.energy = l->get_param(Light3D::PARAM_ENERGY);
+			if (Object::cast_to<DirectionalLight3D>(l)) {
+				row.type = 0;
+				row.dir = xf.basis.get_column(2).normalized();
+			} else {
+				row.type = Object::cast_to<SpotLight3D>(l) ? 2 : 1;
+				row.pos = xf.origin;
+				row.range = MAX(0.01f, float(l->get_param(Light3D::PARAM_RANGE)));
+				row.atten = l->get_param(Light3D::PARAM_ATTENUATION);
+			}
+			r_g.light_rows.push_back(row);
+			r_g.lit = true;
+		}
+	}
+	if (WorldEnvironment *we = Object::cast_to<WorldEnvironment>(p_node)) {
+		const Ref<Environment> env = we->get_environment();
+		if (env.is_valid()) {
+			const Environment::BGMode bg = env->get_background();
+			if (bg == Environment::BG_COLOR) {
+				r_g.clear = env->get_bg_color();
+				r_g.has_clear = true;
+			} else if (bg == Environment::BG_SKY && env->get_sky().is_valid()) {
+				const Ref<ProceduralSkyMaterial> psm = env->get_sky()->get_material();
+				if (psm.is_valid()) {
+					r_g.clear = psm->get_sky_horizon_color();
+					r_g.has_clear = true;
+				}
+			} else if (bg == Environment::BG_CLEAR_COLOR) {
+				r_g.clear = GLOBAL_GET("rendering/environment/defaults/default_clear_color");
+				r_g.has_clear = true;
+			}
+			const Color amb = env->get_ambient_light_color() * env->get_ambient_light_energy();
+			r_g.ambient = amb;
+			if (env->get_ambient_source() == Environment::AMBIENT_SOURCE_SKY || env->get_ambient_source() == Environment::AMBIENT_SOURCE_BG) {
+				r_g.ambient = (r_g.has_clear ? r_g.clear : Color(0.3f, 0.3f, 0.3f)) * env->get_ambient_light_energy() * 0.5f;
+			}
+			r_g.lit = true;
+		}
+	}
+	for (int i = 0; i < p_node->get_child_count(); i++) {
+		collect_lights(p_node->get_child(i), r_g);
+	}
+}
+
+static Color light_at(const Gather &p_g, const Vector3 &p_pos, const Vector3 &p_n) {
+	Color c = p_g.ambient;
+	for (const Gather::LightRow &l : p_g.light_rows) {
+		float k = 0.0f;
+		if (l.type == 0) {
+			k = MAX(0.0f, p_n.dot(l.dir));
+		} else {
+			const Vector3 to = l.pos - p_pos;
+			const float d = to.length();
+			if (d >= l.range || d < 1e-5f) {
+				continue;
+			}
+			const float lambert = MAX(0.0f, p_n.dot(to / d));
+			// Godot's omni window: (1 - (d/r)^4)^2, with distance falloff.
+			const float x = d / l.range;
+			const float window = (1.0f - x * x * x * x);
+			k = lambert * window * window * Math::pow(MAX(1.0f - x, 0.0001f), MAX(l.atten, 0.01f));
+		}
+		c += l.color * (l.energy * k);
+	}
+	return c;
+}
+
+static const char *kWhite = "@white";
+
+static uint16_t white_slot(Gather &r_g) {
+	Ref<Image> white = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+	white->fill(Color(1, 1, 1));
+	return register_image(r_g, white, kWhite);
+}
+
+// Material -> (texture slot, base colour, lit?)
+static uint16_t material_look(Gather &r_g, const Ref<Material> &p_mat, Color &r_color, bool &r_lit, bool &r_vcol, Color &r_emit) {
+	r_color = Color(1, 1, 1);
+	r_lit = true;
+	r_vcol = false;
+	r_emit = Color(0, 0, 0);
+	const Ref<BaseMaterial3D> std = p_mat;
+	if (std.is_valid()) {
+		r_color = std->get_albedo();
+		r_lit = std->get_shading_mode() != BaseMaterial3D::SHADING_MODE_UNSHADED;
+		r_vcol = std->get_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR);
+		if (std->get_feature(BaseMaterial3D::FEATURE_EMISSION)) {
+			r_emit = std->get_emission() * std->get_emission_energy_multiplier();
+		}
+		const Ref<Texture2D> tex = std->get_texture(BaseMaterial3D::TEXTURE_ALBEDO);
+		if (tex.is_valid()) {
+			String name = tex->get_path();
+			if (name.is_empty()) {
+				name = tex->get_name();
+			}
+			const Ref<Image> img = image_from_texture(tex);
+			if (img.is_valid()) {
+				return register_image(r_g, img, name);
+			}
+		}
+		return white_slot(r_g);
+	}
+	const Ref<ShaderMaterial> sm = p_mat;
+	if (sm.is_valid()) {
+		// Shaders do not run on PS2: take the usual albedo/colour/texture
+		// uniforms when present and draw the surface with them.
+		static const char *color_names[] = { "albedo", "albedo_color", "color", "base_color", "tint" };
+		for (const char *nm : color_names) {
+			const Variant v = sm->get_shader_parameter(nm);
+			if (v.get_type() == Variant::COLOR) {
+				r_color = v;
+				break;
+			}
+		}
+		static const char *tex_names[] = { "texture_albedo", "albedo_texture", "texture", "main_texture", "tex" };
+		for (const char *nm : tex_names) {
+			const Ref<Texture2D> tex = sm->get_shader_parameter(nm);
+			if (tex.is_valid()) {
+				const Ref<Image> img = image_from_texture(tex);
+				if (img.is_valid()) {
+					return register_image(r_g, img, tex->get_path());
+				}
+			}
+		}
+		r_lit = false;
+		return white_slot(r_g);
+	}
+	return white_slot(r_g);
+}
+
 static void emit_mesh(Gather &r_g, const Ref<Mesh> &p_mesh, const Transform3D &p_xf, int p_my, Node *p_owner) {
 	if (p_mesh.is_null() || p_my < 0) {
 		return;
 	}
+	const Basis nbasis = p_xf.basis.inverse().transposed();
 	for (int s = 0; s < p_mesh->get_surface_count(); s++) {
 		Array arr = p_mesh->surface_get_arrays(s);
 		PackedVector3Array verts;
+		PackedVector3Array normals;
 		PackedVector2Array uvs;
 		PackedInt32Array idx;
+		PackedColorArray vcols;
 		if (arr.size() > Mesh::ARRAY_VERTEX) {
 			verts = arr[Mesh::ARRAY_VERTEX];
+		}
+		if (arr.size() > Mesh::ARRAY_NORMAL && arr[Mesh::ARRAY_NORMAL].get_type() == Variant::PACKED_VECTOR3_ARRAY) {
+			normals = arr[Mesh::ARRAY_NORMAL];
 		}
 		if (arr.size() > Mesh::ARRAY_TEX_UV && arr[Mesh::ARRAY_TEX_UV].get_type() == Variant::PACKED_VECTOR2_ARRAY) {
 			uvs = arr[Mesh::ARRAY_TEX_UV];
@@ -633,9 +883,15 @@ static void emit_mesh(Gather &r_g, const Ref<Mesh> &p_mesh, const Transform3D &p
 		if (arr.size() > Mesh::ARRAY_INDEX && arr[Mesh::ARRAY_INDEX].get_type() == Variant::PACKED_INT32_ARRAY) {
 			idx = arr[Mesh::ARRAY_INDEX];
 		}
+		if (arr.size() > Mesh::ARRAY_COLOR && arr[Mesh::ARRAY_COLOR].get_type() == Variant::PACKED_COLOR_ARRAY) {
+			vcols = arr[Mesh::ARRAY_COLOR];
+		}
 		if (p_xf != Transform3D()) {
 			for (int i = 0; i < verts.size(); i++) {
 				verts.write[i] = p_xf.xform(verts[i]);
+			}
+			for (int i = 0; i < normals.size(); i++) {
+				normals.write[i] = nbasis.xform(normals[i]).normalized();
 			}
 		}
 		Ref<Material> mat;
@@ -645,10 +901,162 @@ static void emit_mesh(Gather &r_g, const Ref<Mesh> &p_mesh, const Transform3D &p
 		if (mat.is_null()) {
 			mat = p_mesh->surface_get_material(s);
 		}
-		String tex_name;
-		const Ref<Image> img = image_from_material(mat, tex_name);
-		const uint16_t slot = register_image(r_g, img, tex_name);
-		emit_tris(r_g, verts, uvs, idx, slot, uint16_t(p_my));
+		Color base;
+		Color emit;
+		bool lit = true;
+		bool use_vcol = false;
+		const uint16_t slot = material_look(r_g, mat, base, lit, use_vcol, emit);
+		PackedColorArray cols;
+		cols.resize(verts.size());
+		for (int i = 0; i < verts.size(); i++) {
+			Color c = base;
+			if (use_vcol && i < vcols.size()) {
+				c *= vcols[i];
+			}
+			if (lit && r_g.lit) {
+				const Vector3 n = i < normals.size() ? normals[i] : Vector3(0, 1, 0);
+				const Color l = light_at(r_g, verts[i], n);
+				c = Color(c.r * l.r, c.g * l.g, c.b * l.b);
+			}
+			c += emit;
+			cols.write[i] = c;
+		}
+		emit_tris(r_g, verts, uvs, idx, slot, uint16_t(p_my), cols);
+	}
+}
+
+// Effective CanvasItem visibility without a SceneTree (parents included).
+static bool canvas_visible(Node *p_node) {
+	for (Node *n = p_node; n; n = n->get_parent()) {
+		if (CanvasItem *ci = Object::cast_to<CanvasItem>(n)) {
+			if (!ci->is_visible()) {
+				return false;
+			}
+		}
+		if (CanvasLayer *cl = Object::cast_to<CanvasLayer>(n)) {
+			if (!cl->is_visible()) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static Vector2 control_global(Control *p_c) {
+	Vector2 pos;
+	for (Node *n = p_c; n; n = n->get_parent()) {
+		if (Control *c = Object::cast_to<Control>(n)) {
+			pos += c->get_position();
+		} else if (CanvasLayer *cl = Object::cast_to<CanvasLayer>(n)) {
+			pos += cl->get_offset();
+			break;
+		} else if (!Object::cast_to<CanvasItem>(n)) {
+			break;
+		}
+	}
+	return pos;
+}
+
+// HUD kind byte: bits 0-1 kind (1 label, 2 rect, 3 button), bits 2-3 align,
+// bits 4-6 glyph scale - 1 (5x7 font), bit 7 hidden.
+static int hud_scale(int p_font_size) {
+	return CLAMP(int(Math::round(float(p_font_size) / 8.0f)), 1, 8) - 1;
+}
+
+static Gather::HudRow hud_row_for(Control *p_c, int p_kind, Gather &r_g, int p_my) {
+	(void)r_g;
+	Gather::HudRow row;
+	row.node_id = p_my;
+	row.kind = uint8_t(p_kind);
+	const Vector2 gp = control_global(p_c);
+	row.x = int16_t(gp.x);
+	row.y = int16_t(gp.y);
+	row.w = int16_t(MAX(8.0, p_c->get_size().x));
+	row.h = int16_t(MAX(8.0, p_c->get_size().y));
+	if (!canvas_visible(p_c)) {
+		row.kind |= 0x80;
+	}
+	return row;
+}
+
+static void push_hud(Gather &r_g, const Gather::HudRow &p_row, int p_my) {
+	if (r_g.hud.size() >= kMaxHud) {
+		r_g.hud_dropped++;
+		return;
+	}
+	if (p_my >= 0 && p_my < r_g.gnodes.size()) {
+		r_g.gnodes.write[p_my].hud = r_g.hud.size();
+	}
+	r_g.hud.push_back(p_row);
+}
+
+static void record_gdir_node(Node *p_node, Gather &r_g, int p_my, int p_parent) {
+	GdirNode g;
+	g.parent = p_parent;
+	g.name = p_node->get_name();
+	if (p_parent < 0) {
+		g.path = ".";
+	} else {
+		const String pp = r_g.gnodes[p_parent].path;
+		g.path = pp == "." ? g.name : pp + "/" + g.name;
+	}
+	g.flags = 0;
+	bool visible = true;
+	if (Node3D *n3 = Object::cast_to<Node3D>(p_node)) {
+		g.flags |= 2;
+		visible = n3->is_visible();
+		g.lpos = n3->get_position();
+		g.lrot = n3->get_rotation();
+		g.lscale = n3->get_scale();
+		g.w0 = world_xform(n3);
+	} else if (Control *c = Object::cast_to<Control>(p_node)) {
+		g.flags |= 4;
+		visible = c->is_visible();
+		g.lpos = Vector3(c->get_position().x, c->get_position().y, 0.0f);
+		g.lscale = Vector3(c->get_size().x, c->get_size().y, 1.0f);
+		const Vector2 gp = control_global(c);
+		g.w0.basis.rows[0] = Vector3(c->get_position().x, c->get_position().y, 0.0f);
+		g.w0.origin = Vector3(gp.x, gp.y, 0.0f);
+	} else if (CanvasItem *ci = Object::cast_to<CanvasItem>(p_node)) {
+		visible = ci->is_visible();
+	} else if (CanvasLayer *cl = Object::cast_to<CanvasLayer>(p_node)) {
+		visible = cl->is_visible();
+	}
+	if (visible) {
+		g.flags |= 1;
+	}
+	if (Object::cast_to<Camera3D>(p_node)) {
+		g.flags |= 8;
+	}
+	const Ref<Script> scr = p_node->get_script();
+	if (scr.is_valid() && scr->get_language() && scr->get_language()->get_name() == "GDScript") {
+		g.script_path = scr->get_path();
+		g.script_source = scr->get_source_code();
+		if (g.script_source.is_empty() && !g.script_path.is_empty() && !g.script_path.contains("::")) {
+			g.script_source = FileAccess::get_file_as_string(g.script_path);
+		}
+		List<PropertyInfo> props;
+		scr->get_script_property_list(&props);
+		for (const PropertyInfo &pi : props) {
+			if (pi.usage & PROPERTY_USAGE_EDITOR) {
+				g.exported[pi.name] = p_node->get(pi.name);
+			}
+		}
+	}
+	r_g.node_ids[p_node] = p_my;
+	r_g.gnodes.push_back(g);
+	// Button.pressed connections made in the scene file; targets resolve after the walk.
+	if (p_node->has_signal("pressed")) {
+		List<Object::Connection> conns;
+		p_node->get_signal_connection_list("pressed", &conns);
+		for (const Object::Connection &c : conns) {
+			Gather::PendingConn pc;
+			pc.src = p_my;
+			pc.signal = "pressed";
+			pc.target = Object::cast_to<Node>(c.callable.get_object());
+			pc.method = c.callable.get_method();
+			r_g.pending_conns.push_back(pc);
+		}
 	}
 }
 
@@ -695,6 +1103,7 @@ static void walk_scene(Node *p_node, Gather &r_g, int p_parent, const String &p_
 		}
 		my = r_g.nodes.size();
 		r_g.nodes.push_back(row);
+		record_gdir_node(p_node, r_g, my, p_parent);
 	} else {
 		r_g.node_dropped++;
 	}
@@ -709,6 +1118,10 @@ static void walk_scene(Node *p_node, Gather &r_g, int p_parent, const String &p_
 			row.fov = cam->get_fov();
 			if (cam->is_current()) {
 				row.flags = 1;
+				if (r_g.camera_node < 0) {
+					r_g.camera_node = my;
+					r_g.camera_fov = cam->get_fov();
+				}
 			}
 			r_g.cams.push_back(row);
 		}
@@ -954,63 +1367,44 @@ static void walk_scene(Node *p_node, Gather &r_g, int p_parent, const String &p_
 		}
 	}
 	if (Label *lab = Object::cast_to<Label>(p_node)) {
-		if (r_g.hud.size() < kMaxHud) {
-			Gather::HudRow row;
-			row.kind = 1;
-			row.x = int16_t(lab->get_position().x);
-			row.y = int16_t(lab->get_position().y);
-			row.w = int16_t(MAX(8.0, lab->get_size().x));
-			row.h = int16_t(MAX(8.0, lab->get_size().y));
-			row.text = lab->get_text();
-			r_g.hud.push_back(row);
-		} else {
-			r_g.hud_dropped++;
-		}
+		Gather::HudRow row = hud_row_for(lab, 1, r_g, my);
+		const Color fc = lab->get_theme_color("font_color");
+		row.r = uint8_t(CLAMP(int(fc.r * 255.0f), 0, 255));
+		row.g = uint8_t(CLAMP(int(fc.g * 255.0f), 0, 255));
+		row.b = uint8_t(CLAMP(int(fc.b * 255.0f), 0, 255));
+		row.text = lab->get_text();
+		const HorizontalAlignment ha = lab->get_horizontal_alignment();
+		row.kind |= uint8_t((ha == HORIZONTAL_ALIGNMENT_CENTER ? 1 : (ha == HORIZONTAL_ALIGNMENT_RIGHT ? 2 : 0)) << 2);
+		row.kind |= uint8_t(hud_scale(lab->get_theme_font_size("font_size")) << 4);
+		push_hud(r_g, row, my);
 	}
 	if (Button *btn = Object::cast_to<Button>(p_node)) {
-		if (r_g.hud.size() < kMaxHud) {
-			Gather::HudRow row;
-			row.kind = 3;
-			row.x = int16_t(btn->get_position().x);
-			row.y = int16_t(btn->get_position().y);
-			row.w = int16_t(MAX(8.0, btn->get_size().x));
-			row.h = int16_t(MAX(16.0, btn->get_size().y));
-			row.text = hud_button_text(btn, btn->get_text());
-			r_g.hud.push_back(row);
-		} else {
-			r_g.hud_dropped++;
-		}
+		Gather::HudRow row = hud_row_for(btn, 3, r_g, my);
+		row.h = int16_t(MAX(16, int(row.h)));
+		const Ref<StyleBoxFlat> sb = btn->get_theme_stylebox("normal");
+		const Color bc = sb.is_valid() ? sb->get_bg_color() : Color(0.19f, 0.19f, 0.25f);
+		row.r = uint8_t(CLAMP(int(bc.r * 255.0f), 0, 255));
+		row.g = uint8_t(CLAMP(int(bc.g * 255.0f), 0, 255));
+		row.b = uint8_t(CLAMP(int(bc.b * 255.0f), 0, 255));
+		row.text = hud_button_text(btn, btn->get_text());
+		row.kind |= uint8_t(1 << 2); // buttons center their text
+		row.kind |= uint8_t(hud_scale(btn->get_theme_font_size("font_size")) << 4);
+		push_hud(r_g, row, my);
 	}
 	if (TextureButton *tb = Object::cast_to<TextureButton>(p_node)) {
-		if (r_g.hud.size() < kMaxHud) {
-			Gather::HudRow row;
-			row.kind = 3;
-			row.x = int16_t(tb->get_position().x);
-			row.y = int16_t(tb->get_position().y);
-			row.w = int16_t(MAX(8.0, tb->get_size().x));
-			row.h = int16_t(MAX(16.0, tb->get_size().y));
-			row.text = hud_button_text(tb, String(tb->get_name()));
-			r_g.hud.push_back(row);
-		} else {
-			r_g.hud_dropped++;
-		}
+		Gather::HudRow row = hud_row_for(tb, 3, r_g, my);
+		row.h = int16_t(MAX(16, int(row.h)));
+		row.text = hud_button_text(tb, String(tb->get_name()));
+		row.kind |= uint8_t(1 << 2);
+		push_hud(r_g, row, my);
 	}
 	if (ColorRect *bar = Object::cast_to<ColorRect>(p_node)) {
-		if (r_g.hud.size() < kMaxHud) {
-			Gather::HudRow row;
-			row.kind = 2;
-			row.x = int16_t(bar->get_position().x);
-			row.y = int16_t(bar->get_position().y);
-			row.w = int16_t(MAX(8.0, bar->get_size().x));
-			row.h = int16_t(MAX(8.0, bar->get_size().y));
-			const Color c = bar->get_color();
-			row.r = uint8_t(CLAMP(int(c.r * 255.0f), 0, 255));
-			row.g = uint8_t(CLAMP(int(c.g * 255.0f), 0, 255));
-			row.b = uint8_t(CLAMP(int(c.b * 255.0f), 0, 255));
-			r_g.hud.push_back(row);
-		} else {
-			r_g.hud_dropped++;
-		}
+		Gather::HudRow row = hud_row_for(bar, 2, r_g, my);
+		const Color c = bar->get_color();
+		row.r = uint8_t(CLAMP(int(c.r * 255.0f), 0, 255));
+		row.g = uint8_t(CLAMP(int(c.g * 255.0f), 0, 255));
+		row.b = uint8_t(CLAMP(int(c.b * 255.0f), 0, 255));
+		push_hud(r_g, row, my);
 	}
 	if (Path3D *path = Object::cast_to<Path3D>(p_node)) {
 		const Ref<Curve3D> curve = path->get_curve();
@@ -1386,7 +1780,6 @@ static void append_i16(Vector<uint8_t> &o, int16_t v) {
 	append_u16(o, uint16_t(v));
 }
 
-
 static Vector<uint8_t> write_cam_blob(const Gather &p_g) {
 	Vector<uint8_t> out;
 	out.push_back('C');
@@ -1725,7 +2118,7 @@ static void append_stub_warnings(Gather &p_g, Vector<String> &r_warn, const Stri
 		r_warn.push_back(p_pack + "AudioStreamPlayer is allow-listed; SFX00 is the first res:// .wav, not a per-node bank.");
 	}
 	if (p_g.cameras > kMaxCameras) {
-		r_warn.push_back(vformat("%skept first %d of %d cameras (guest uses the first Camera3D).", p_pack, kMaxCameras, p_g.cameras));
+		r_warn.push_back(vformat("%skipped first %d of %d cameras (guest uses the first Camera3D).", p_pack, kMaxCameras, p_g.cameras));
 	}
 }
 
@@ -1879,6 +2272,7 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 	}
 	Node *root = ps->instantiate();
 	live.push_back(root);
+	collect_lights(root, gathered);
 	walk_scene(root, gathered, -1, main_scene);
 
 	r_out.pack_count = 1;
@@ -1920,6 +2314,7 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 		Node *er = extra_ps->instantiate();
 		extra_live.push_back(er);
 		Gather one;
+		collect_lights(er, one);
 		walk_scene(er, one, -1, extra);
 		for (int k = 0; k < one.kit_scenes.size(); k++) {
 			const String more = one.kit_scenes[k];
@@ -1992,6 +2387,62 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 		placeholder->fill(Color(0.2f, 0.35f, 0.55f));
 		gathered.images.push_back(placeholder);
 		gathered.image_names.push_back("placeholder");
+	}
+
+	// Compiled scripts (GDIR): every pack's scripted nodes, one program.
+	{
+		Vector<GdirPack> gpacks;
+		auto to_pack = [](const Gather &g, int p_pack, const String &p_scene) {
+			GdirPack gp;
+			gp.pack = p_pack;
+			gp.scene = p_scene;
+			gp.nodes = g.gnodes;
+			gp.has_clear = g.has_clear;
+			gp.clear = g.clear;
+			gp.camera = g.camera_node;
+			gp.fov = g.camera_fov;
+			for (const Gather::PendingConn &pc : g.pending_conns) {
+				const int *t = g.node_ids.getptr(pc.target);
+				if (!t) {
+					continue;
+				}
+				GdirConn c;
+				c.src = pc.src;
+				c.signal = pc.signal;
+				c.target = *t;
+				c.method = pc.method;
+				gp.conns.push_back(c);
+			}
+			return gp;
+		};
+		gpacks.push_back(to_pack(gathered, 0, main_scene));
+		for (int i = 0; i < extra_gathers.size(); i++) {
+			gpacks.push_back(to_pack(extra_gathers[i], i + 1, cooked_extras[i]));
+		}
+		GdirResult gr;
+		gdir_compile(gpacks, gr);
+		r_out.warnings.append_array(gr.warnings);
+		const bool require = GLOBAL_GET("ps2/scripts/require_compiled");
+		if (!gr.errors.is_empty()) {
+			if (require) {
+				r_out.errors.append_array(gr.errors);
+				r_out.report = gr.errors[0];
+				free_live();
+				return ERR_UNCONFIGURED;
+			}
+			for (const String &e : gr.errors) {
+				r_out.warnings.push_back("script not compiled (keyword tape used instead): " + e);
+			}
+		} else if (!gr.blob.is_empty()) {
+			// SCRP flag bit 0: a GDIR program follows the tape.
+			if (scripts.scrp.size() >= 12) {
+				scripts.scrp.write[6] |= 1;
+			}
+			scripts.scrp.append_array(gr.blob);
+			scripts.ir_text += vformat("GDIR v1: %d scripts, %d functions, %d instances, %d bytes\n", gr.classes, gr.functions, gr.instances, gr.blob.size());
+			scripts.ir_text += gr.listing;
+			r_out.infos.push_back(vformat("compiled %d scripts (%d functions) for %d nodes into GDIR (%d bytes).", gr.classes, gr.functions, gr.instances, gr.blob.size()));
+		}
 	}
 
 	const Vector<uint8_t> node_blob = write_node_blob(gathered);
