@@ -30,12 +30,14 @@ class EditorExportPlatformPS2 : public EditorExportPlatform {
 	Error _ensure_toolchain(const String &p_profile, String &r_error);
 	bool _scan_forbidden(const String &p_dir, String &r_hit) const;
 	Error _spawn_toolchain(const List<String> &p_args, String &r_output, int &r_exit) const;
-	Error _try_make_iso(const String &p_elf_path, String &r_warning);
+	Error _try_make_iso(const String &p_elf_path, const String &p_product_code, String &r_warning);
+	static bool _is_product_code(const String &p_code);
 	void _emit_cook_messages(const ps2_cook::CookResult &p_cooked);
 
 public:
 	virtual void get_preset_features(const Ref<EditorExportPreset> &p_preset, List<String> *r_features) const override;
 	virtual void get_export_options(List<ExportOption> *r_options) const override;
+	virtual String get_export_option_warning(const EditorExportPreset *p_preset, const StringName &p_name) const override;
 	virtual String get_os_name() const override { return "PlayStation 2"; }
 	virtual String get_name() const override { return "PS2"; }
 	virtual Ref<Texture2D> get_logo() const override { return logo; }

@@ -201,6 +201,38 @@ void EditorExportPlatformPS2::get_export_options(List<ExportOption> *r_options) 
 	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "ps2/width", PROPERTY_HINT_ENUM, "640,512,320"), 0));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "ps2/display_hint", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_READ_ONLY), "Height from width: 640/512 -> 448 NTSC / 512 PAL; 320 -> 224. NTSC 60 Hz, PAL 50 Hz."));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::BOOL, "ps2/make_iso"), false));
+	// The disc's boot ELF name. The PS2 BIOS checks it against the disc's key
+	// and only boots product codes; PCSX2's fast boot skips the BIOS, so a
+	// GAME.ELF disc boots fast but not with a full boot.
+	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "ps2/product_code", PROPERTY_HINT_PLACEHOLDER_TEXT, "SLUS_000.01"), "SLUS_000.01"));
+}
+
+bool EditorExportPlatformPS2::_is_product_code(const String &p_code) {
+	// four letters, underscore, three digits, dot, two digits: SLUS_000.01
+	if (p_code.length() != 11 || p_code[4] != '_' || p_code[8] != '.') {
+		return false;
+	}
+	for (int i = 0; i < 11; i++) {
+		const char32_t c = p_code[i];
+		if (i < 4) {
+			if (!is_ascii_alphabet_char(c)) {
+				return false;
+			}
+		} else if (i != 4 && i != 8 && !is_digit(c)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+String EditorExportPlatformPS2::get_export_option_warning(const EditorExportPreset *p_preset, const StringName &p_name) const {
+	if (p_preset && p_name == StringName("ps2/product_code")) {
+		const String code = String(p_preset->get("ps2/product_code")).strip_edges();
+		if (!code.is_empty() && !_is_product_code(code)) {
+			return "Use a product code like SLUS_000.01 (four letters, _, three digits, ., two digits). The PS2 BIOS only boots a disc whose boot ELF has one.";
+		}
+	}
+	return String();
 }
 
 List<String> EditorExportPlatformPS2::get_binary_extensions(const Ref<EditorExportPreset> &p_preset) const {
@@ -367,7 +399,7 @@ Error EditorExportPlatformPS2::export_project(const Ref<EditorExportPreset> &p_p
 
 	if (want_iso) {
 		String iso_warn;
-		if (_try_make_iso(p_path, iso_warn) != OK) {
+		if (_try_make_iso(p_path, String(p_preset->get("ps2/product_code")).strip_edges(), iso_warn) != OK) {
 			add_message(EXPORT_MESSAGE_WARNING, "PS2", iso_warn.is_empty() ? String("ISO skipped.") : iso_warn);
 		}
 	}
@@ -389,7 +421,7 @@ void EditorExportPlatformPS2::_emit_cook_messages(const ps2_cook::CookResult &p_
 	}
 }
 
-Error EditorExportPlatformPS2::_try_make_iso(const String &p_elf_path, String &r_warning) {
+Error EditorExportPlatformPS2::_try_make_iso(const String &p_elf_path, const String &p_product_code, String &r_warning) {
 	const String dir = p_elf_path.get_base_dir();
 	const String iso_out = dir.path_join(p_elf_path.get_file().get_basename() + ".iso");
 	List<String> args;
@@ -399,6 +431,13 @@ Error EditorExportPlatformPS2::_try_make_iso(const String &p_elf_path, String &r
 	args.push_back(dir);
 	args.push_back("--out");
 	args.push_back(iso_out);
+	// the boot ELF goes on the disc under this name (ps2/product_code)
+	if (_is_product_code(p_product_code)) {
+		args.push_back("--boot-elf");
+		args.push_back(p_product_code.to_upper());
+	} else if (!p_product_code.is_empty()) {
+		add_message(EXPORT_MESSAGE_WARNING, "PS2", "ps2/product_code \"" + p_product_code + "\" is not a product code like SLUS_000.01; the ISO uses the toolchain's default.");
+	}
 	String output;
 	int exitcode = 0;
 	const Error err = _spawn_toolchain(args, output, exitcode);
