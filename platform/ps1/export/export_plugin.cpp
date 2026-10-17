@@ -440,6 +440,15 @@ Error EditorExportPlatformPS1::_try_make_iso(const String &p_exe_path, const ps1
 		r_warning = "Could not write iso.xml.";
 		return FAILED;
 	}
+	// mkpsxiso reads each source relative to iso.xml's own folder, and the
+	// export's paths are relative to the project: give it absolute ones.
+	const String root = ProjectSettings::get_singleton()->get_resource_path();
+	auto abs_path = [&](const String &p) -> String {
+		if (p.is_empty() || p.is_absolute_path()) {
+			return p.begins_with("res://") ? ProjectSettings::get_singleton()->globalize_path(p) : p;
+		}
+		return root.path_join(p).simplify_path();
+	};
 	xf->store_string(
 			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 			"<iso_project>\n"
@@ -447,12 +456,12 @@ Error EditorExportPlatformPS1::_try_make_iso(const String &p_exe_path, const ps1
 			"\t\t<identifiers system=\"PLAYSTATION\" application=\"PLAYSTATION\" volume=\"BLAZIUM\" volume_set=\"BLAZIUM\" publisher=\"BLAZIUM\" data_preparer=\"BLAZIUM\" />\n"
 			"\t\t<directory_tree>\n"
 			"\t\t\t<file name=\"SYSTEM.CNF\" source=\"" +
-			cnf.xml_escape(true) + "\" type=\"data\" />\n"
-								   "\t\t\t<file name=\"GAME.EXE\" source=\"" +
-			p_exe_path.xml_escape(true) + "\" type=\"data\" />\n");
+			abs_path(cnf).xml_escape(true) + "\" type=\"data\" />\n"
+											 "\t\t\t<file name=\"GAME.EXE\" source=\"" +
+			abs_path(p_exe_path).xml_escape(true) + "\" type=\"data\" />\n");
 	auto add_file = [&](const String &name, const String &src) {
 		if (!src.is_empty() && FileAccess::exists(src)) {
-			xf->store_string("\t\t\t<file name=\"" + name + "\" source=\"" + src.xml_escape(true) + "\" type=\"data\" />\n");
+			xf->store_string("\t\t\t<file name=\"" + name + "\" source=\"" + abs_path(src).xml_escape(true) + "\" type=\"data\" />\n");
 		}
 	};
 	add_file("FMV00.STR", p_cooked.str_path);
@@ -490,7 +499,7 @@ Error EditorExportPlatformPS1::_try_make_iso(const String &p_exe_path, const ps1
 			xf->store_string("\t\t\t\t<dir name=\"" + E.key + "\">\n");
 			for (int f = 0; f < E.value.size(); f++) {
 				const String src = E.value[f];
-				xf->store_string("\t\t\t\t\t<file name=\"" + src.get_file().to_upper() + "\" source=\"" + src.xml_escape(true) + "\" type=\"data\" />\n");
+				xf->store_string("\t\t\t\t\t<file name=\"" + src.get_file().to_upper() + "\" source=\"" + abs_path(src).xml_escape(true) + "\" type=\"data\" />\n");
 			}
 			xf->store_string("\t\t\t\t</dir>\n");
 		}
@@ -505,9 +514,9 @@ Error EditorExportPlatformPS1::_try_make_iso(const String &p_exe_path, const ps1
 	args.push_back("ps1");
 	args.push_back("iso");
 	args.push_back("--xml");
-	args.push_back(xml);
+	args.push_back(abs_path(xml));
 	args.push_back("--out");
-	args.push_back(iso_out);
+	args.push_back(abs_path(iso_out));
 	String output;
 	int exitcode = 0;
 	const Error err = _spawn_toolchain(args, output, exitcode);
