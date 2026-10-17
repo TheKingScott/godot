@@ -30,7 +30,8 @@ class EditorExportPlatformPS2 : public EditorExportPlatform {
 	Error _ensure_toolchain(const String &p_profile, String &r_error);
 	bool _scan_forbidden(const String &p_dir, String &r_hit) const;
 	Error _spawn_toolchain(const List<String> &p_args, String &r_output, int &r_exit) const;
-	Error _try_make_iso(const String &p_elf_path, const String &p_product_code, String &r_warning);
+	Error _try_make_iso(const String &p_elf_path, const String &p_product_code, const String &p_boot_logo, String &r_warning);
+	String _write_boot_logo(const Ref<EditorExportPreset> &p_preset, const String &p_dir);
 	static bool _is_product_code(const String &p_code);
 	void _emit_cook_messages(const ps2_cook::CookResult &p_cooked);
 
