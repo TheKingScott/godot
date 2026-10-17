@@ -1757,6 +1757,142 @@ static Error write_bytes(const String &p_path, const Vector<uint8_t> &p_bytes) {
 	return OK;
 }
 
+// ---------------------------------------------------------- memory card
+// MCSAVE.BIN tells the guest how to file PS2.save_slot saves on the memory
+// card: the directory (one per game), the title the BIOS browser shows, and
+// the browser icon. Layout: "MCSV", u16 version 1, u16 header size (76),
+// char dir[32], char title[32], u32 icon size, then the icon.
+//
+// The icon is the project's application/config/icon on a flat square: a PS2
+// .ico (ps2icon 0.5: header, per-vertex coordinate / normal / UV + colour,
+// one animation frame, then a 128x128 16-bit texture). Without an icon the
+// square is a plain colour.
+static String mc_ascii(const String &p_text, int p_max, bool p_dir) {
+	String out;
+	for (int i = 0; i < p_text.length() && out.length() < p_max; i++) {
+		const char32_t c = p_text[i];
+		if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			out += String::chr(c);
+		} else if (c >= 'a' && c <= 'z') {
+			out += String::chr(p_dir ? c - 32 : c);
+		} else if (!p_dir && c >= 32 && c < 127) {
+			out += String::chr(c);
+		}
+	}
+	return out;
+}
+
+static void append_s16(Vector<uint8_t> &o, int v) {
+	append_u16(o, uint16_t(int16_t(CLAMP(v, -32768, 32767))));
+}
+
+static Vector<uint8_t> mc_icon(const Ref<Image> &p_img) {
+	Vector<uint8_t> o;
+	append_u32(o, 0x00010000); // file id
+	append_u32(o, 1); // animation shapes
+	append_u32(o, 0x07); // texture, uncompressed
+	append_f32(o, 1.0f);
+	append_u32(o, 6); // two triangles
+	// a 2.4-unit square standing on y = 0; icon space has y pointing down
+	const float x0 = -1.2f, x1 = 1.2f, y0 = -2.4f, y1 = 0.0f;
+	const float quad[6][4] = {
+		{ x0, y0, 0, 0 }, { x1, y0, 1, 0 }, { x0, y1, 0, 1 },
+		{ x1, y0, 1, 0 }, { x1, y1, 1, 1 }, { x0, y1, 0, 1 },
+	};
+	for (int i = 0; i < 6; i++) {
+		append_s16(o, int(quad[i][0] * 4096.0f));
+		append_s16(o, int(quad[i][1] * 4096.0f));
+		append_s16(o, 0);
+		append_u16(o, 0);
+		append_s16(o, 0); // normal toward the viewer
+		append_s16(o, 0);
+		append_s16(o, -4096);
+		append_u16(o, 0);
+		append_s16(o, int(quad[i][2] * 4096.0f));
+		append_s16(o, int(quad[i][3] * 4096.0f));
+		o.push_back(0x80);
+		o.push_back(0x80);
+		o.push_back(0x80);
+		o.push_back(0x80);
+	}
+	// one still frame
+	append_u32(o, 0x01);
+	append_u32(o, 1); // frame length
+	append_f32(o, 1.0f); // speed
+	append_u32(o, 0); // play offset
+	append_u32(o, 1); // frames
+	append_u32(o, 0); // shape
+	append_u32(o, 1); // keys
+	append_f32(o, 1.0f); // time
+	append_f32(o, 1.0f); // value
+	// texture: 128x128, 5 bits a channel with red lowest, top bit set (opaque)
+	Ref<Image> img;
+	if (p_img.is_valid() && !p_img->is_empty()) {
+		img = p_img->duplicate();
+		if (img->is_compressed()) {
+			img->decompress();
+		}
+		img->convert(Image::FORMAT_RGBA8);
+		img->resize(128, 128, Image::INTERPOLATE_BILINEAR);
+	}
+	for (int y = 0; y < 128; y++) {
+		for (int x = 0; x < 128; x++) {
+			Color c(0.30f, 0.45f, 0.80f, 1.0f);
+			if (img.is_valid()) {
+				c = img->get_pixel(x, y);
+				// transparent parts take the browser's dark background colour
+				c = Color(0.06f, 0.05f, 0.12f).lerp(Color(c.r, c.g, c.b), c.a);
+			}
+			const int r = CLAMP(int(c.r * 31.0f + 0.5f), 0, 31);
+			const int g = CLAMP(int(c.g * 31.0f + 0.5f), 0, 31);
+			const int b = CLAMP(int(c.b * 31.0f + 0.5f), 0, 31);
+			append_u16(o, uint16_t(0x8000 | (b << 10) | (g << 5) | r));
+		}
+	}
+	return o;
+}
+
+static Vector<uint8_t> mc_save_config(const CookOptions &p_opts) {
+	ProjectSettings *ps = ProjectSettings::get_singleton();
+	String name = ps ? String(ps->get("application/config/name")) : String();
+	if (name.strip_edges().is_empty()) {
+		name = "Blazium game";
+	}
+	// region letters as the BIOS browser groups saves: BA America, BE Europe
+	String dir = (p_opts.region == 1 ? "BE" : "BA") + mc_ascii(name, 30, true);
+	if (dir.length() <= 2) {
+		dir += "BLAZIUM";
+	}
+	const String title = mc_ascii(name, 32, false);
+	Ref<Image> icon;
+	const String icon_path = ps ? String(ps->get("application/config/icon")) : String();
+	if (!icon_path.is_empty() && ResourceLoader::exists(icon_path)) {
+		Ref<Texture2D> tex = ResourceLoader::load(icon_path);
+		if (tex.is_valid()) {
+			icon = image_from_texture(tex);
+		}
+	}
+	const Vector<uint8_t> ico = mc_icon(icon);
+	Vector<uint8_t> o;
+	o.push_back('M');
+	o.push_back('C');
+	o.push_back('S');
+	o.push_back('V');
+	append_u16(o, 1);
+	append_u16(o, 76);
+	const CharString d = dir.ascii();
+	const CharString t = title.ascii();
+	for (int i = 0; i < 32; i++) {
+		o.push_back(i < d.length() ? uint8_t(d[i]) : 0);
+	}
+	for (int i = 0; i < 32; i++) {
+		o.push_back(i < t.length() ? uint8_t(t[i]) : 0);
+	}
+	append_u32(o, uint32_t(ico.size()));
+	o.append_array(ico);
+	return o;
+}
+
 static int display_height(const CookOptions &p_opts) {
 	if (p_opts.width == 320) {
 		return 224;
@@ -2621,6 +2757,11 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 		r_out.report = r_out.errors[r_out.errors.size() - 1];
 		free_live();
 		return ERR_CANT_CREATE;
+	}
+
+	// PS2.save_slot's directory, title and icon (read by the guest's mc_io)
+	if (write_bytes(p_export_dir.path_join("MCSAVE.BIN"), mc_save_config(p_opts)) != OK) {
+		r_out.warnings.push_back("failed to write MCSAVE.BIN; memory card saves get a generic name and no icon.");
 	}
 
 	if (extra_gathers.size() >= 80) {
