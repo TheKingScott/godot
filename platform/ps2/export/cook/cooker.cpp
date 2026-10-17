@@ -1796,8 +1796,12 @@ static Vector<uint8_t> mc_icon(const Ref<Image> &p_img) {
 	// a 2.4-unit square standing on y = 0; icon space has y pointing down
 	const float x0 = -1.2f, x1 = 1.2f, y0 = -2.4f, y1 = 0.0f;
 	const float quad[6][4] = {
-		{ x0, y0, 0, 0 }, { x1, y0, 1, 0 }, { x0, y1, 0, 1 },
-		{ x1, y0, 1, 0 }, { x1, y1, 1, 1 }, { x0, y1, 0, 1 },
+		{ x0, y0, 0, 0 },
+		{ x1, y0, 1, 0 },
+		{ x0, y1, 0, 1 },
+		{ x1, y0, 1, 0 },
+		{ x1, y1, 1, 1 },
+		{ x0, y1, 0, 1 },
 	};
 	for (int i = 0; i < 6; i++) {
 		append_s16(o, int(quad[i][0] * 4096.0f));

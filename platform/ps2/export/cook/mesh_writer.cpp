@@ -39,7 +39,7 @@ static void append_f32(Vector<uint8_t> &o, float v) {
 // The guest culls runs of consecutive triangles by one bounding sphere, and
 // sends a run that reaches past the camera through its slower clipper. A
 // node's triangles arrive in whatever order its mesh was built (a road
-// strip, a whole lap long), so runs could cover hundreds of metres. Each
+// strip, a whole lap long), so runs could cover hundreds of meters. Each
 // node's triangles are put in Z order of 12 m ground cells instead; nodes
 // keep their order and stay contiguous, and triangles are unindexed, so
 // nothing else depends on the order.
