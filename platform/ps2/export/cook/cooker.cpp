@@ -2699,7 +2699,6 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 	append_mesh_extras(gathered, mesh);
 
 	Vector<GsTex> texs;
-	int tex_vram = 0;
 	for (int i = 0; i < gathered.images.size(); i++) {
 		GsTex one;
 		const Error terr = write_gs_tex(gathered.images[i], one);
@@ -2710,7 +2709,6 @@ Error cook_project(const String &p_export_dir, CookResult &r_out, const CookOpti
 			return terr;
 		}
 		texs.push_back(one);
-		tex_vram += one.vram_bytes;
 	}
 	GtexBlob gtex;
 	write_gtex_pack(texs, gtex);

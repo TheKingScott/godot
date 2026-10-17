@@ -62,11 +62,13 @@ void register_ps2_exporter_types() {
 	GDREGISTER_CLASS(PS2FlavorEditorPlugin);
 }
 
+#if defined(WINDOWS_ENABLED) || defined(LINUXBSD_ENABLED)
 static void _ps2_flavor_init() {
 	if (EditorNode::get_singleton()) {
 		EditorNode::get_singleton()->add_editor_plugin(memnew(PS2FlavorEditorPlugin));
 	}
 }
+#endif
 
 void register_ps2_exporter() {
 #if defined(WINDOWS_ENABLED) || defined(LINUXBSD_ENABLED)
@@ -88,6 +90,9 @@ void register_ps2_exporter() {
 
 	Ref<EditorExportPlatformPS2> platform;
 	platform.instantiate();
+	// GDScript only treats PS2.* as callable when the singleton exists at
+	// analyze time, so register it with the exporter, before any plugin.
+	platform->set_api_singleton(memnew(PS2));
 	EditorExport::get_singleton()->add_export_platform(platform);
 	EditorNode::add_init_callback(_ps2_flavor_init);
 #endif

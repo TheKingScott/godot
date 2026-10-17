@@ -14,6 +14,7 @@
 #include "cook/cooker.h"
 #include "logo_svg.gen.h"
 
+#include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
@@ -691,6 +692,14 @@ Error EditorExportPlatformPS2::run(const Ref<EditorExportPreset> &p_preset, int 
 	return OS::get_singleton()->create_process(tc, args);
 }
 
+void EditorExportPlatformPS2::set_api_singleton(Object *p_api) {
+	ERR_FAIL_NULL(p_api);
+	ERR_FAIL_COND(api_singleton != nullptr);
+	ERR_FAIL_COND(Engine::get_singleton()->has_singleton("PS2"));
+	api_singleton = p_api;
+	Engine::get_singleton()->add_singleton(Engine::Singleton("PS2", api_singleton));
+}
+
 EditorExportPlatformPS2::EditorExportPlatformPS2() {
 	if (EditorNode::get_singleton()) {
 		Ref<Image> img = memnew(Image);
@@ -698,4 +707,16 @@ EditorExportPlatformPS2::EditorExportPlatformPS2() {
 		ImageLoaderSVG::create_image_from_string(img, _ps2_logo_svg, EDSCALE, upsample, false);
 		logo = ImageTexture::create_from_image(img);
 	}
+}
+
+EditorExportPlatformPS2::~EditorExportPlatformPS2() {
+	if (!api_singleton) {
+		return;
+	}
+	Engine *engine = Engine::get_singleton();
+	if (engine && engine->has_singleton("PS2") && engine->get_singleton_object("PS2") == api_singleton) {
+		engine->remove_singleton("PS2");
+	}
+	memdelete(api_singleton);
+	api_singleton = nullptr;
 }

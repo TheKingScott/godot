@@ -1141,13 +1141,11 @@ class PS2FlavorEditorPlugin : public EditorPlugin {
 	VBoxContainer *dock = nullptr;
 	Label *status = nullptr;
 	Label *warn = nullptr;
-	PS2 *ps2_stub = nullptr;
 	bool last_enabled = false;
 	ObjectID last_root;
 	int last_nodes = -1;
 
 	void _refresh();
-	void _sync_singleton(bool p_enabled);
 
 protected:
 	static void _bind_methods() {}

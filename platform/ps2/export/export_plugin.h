@@ -18,6 +18,10 @@
 #include "scene/resources/image_texture.h"
 
 class EditorExportPlatformPS2 : public EditorExportPlatform {
+	// The PS2 script API object, registered as the "PS2" Engine singleton.
+	// Owned by the exporter so it is freed when the editor shuts down.
+	Object *api_singleton = nullptr;
+
 	GDCLASS(EditorExportPlatformPS2, EditorExportPlatform);
 
 	Ref<ImageTexture> logo;
@@ -54,5 +58,9 @@ public:
 	virtual String get_option_tooltip(int p_index) const override { return "Spawn blazium-toolchain ps2 run"; }
 	virtual Error run(const Ref<EditorExportPreset> &p_preset, int p_device, BitField<EditorExportPlatform::DebugFlags> p_debug_flags) override;
 
+	// Registers p_api as the "PS2" Engine singleton and takes ownership of it.
+	void set_api_singleton(Object *p_api);
+
 	EditorExportPlatformPS2();
+	~EditorExportPlatformPS2();
 };

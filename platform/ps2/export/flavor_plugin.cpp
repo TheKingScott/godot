@@ -14,7 +14,6 @@
 #include "cook/cooker.h"
 #include "cook/script_cook.h"
 
-#include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
@@ -396,30 +395,8 @@ static int _count_literal_packs() {
 	return n;
 }
 
-void PS2FlavorEditorPlugin::_sync_singleton(bool p_enabled) {
-	Engine *eng = Engine::get_singleton();
-	if (!eng) {
-		return;
-	}
-	if (p_enabled) {
-		if (!ps2_stub) {
-			ps2_stub = memnew(PS2);
-		}
-		if (!eng->has_singleton("PS2")) {
-			eng->add_singleton(Engine::Singleton("PS2", ps2_stub));
-		}
-		return;
-	}
-	if (eng->has_singleton("PS2")) {
-		eng->remove_singleton("PS2");
-	}
-}
-
 void PS2FlavorEditorPlugin::_refresh() {
 	const bool enabled = ProjectSettings::get_singleton() && bool(ProjectSettings::get_singleton()->get("ps2/enabled"));
-	if (enabled) {
-		_sync_singleton(true);
-	}
 	if (!status) {
 		return;
 	}
@@ -516,14 +493,12 @@ PS2FlavorEditorPlugin::PS2FlavorEditorPlugin() {
 		add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock);
 		set_process(true);
 	}
-	_sync_singleton(true);
 	if (!headless) {
 		_refresh();
 	}
 }
 
 PS2FlavorEditorPlugin::~PS2FlavorEditorPlugin() {
-	ps2_stub = nullptr;
 	if (dock) {
 		remove_control_from_docks(dock);
 		dock = nullptr;
