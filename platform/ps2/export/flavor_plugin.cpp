@@ -163,6 +163,12 @@ void PS2::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("poke", "off", "byte"), &PS2::poke);
 	ClassDB::bind_method(D_METHOD("peek", "off"), &PS2::peek);
 	ClassDB::bind_method(D_METHOD("set_fog", "color", "near", "far"), &PS2::set_fog, DEFVAL(Color()), DEFVAL(0.0f), DEFVAL(0.0f));
+	ClassDB::bind_method(D_METHOD("set_views", "count", "camera0", "camera1", "camera2", "camera3"), &PS2::set_views,
+			DEFVAL(Variant()), DEFVAL(Variant()), DEFVAL(Variant()), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("pad_count"), &PS2::pad_count);
+	ClassDB::bind_method(D_METHOD("pad_pressed", "pad", "button"), &PS2::pad_pressed);
+	ClassDB::bind_method(D_METHOD("pad_just_pressed", "pad", "button"), &PS2::pad_just_pressed);
+	ClassDB::bind_method(D_METHOD("pad_axis", "pad"), &PS2::pad_axis);
 	ClassDB::bind_method(D_METHOD("godot_save_bytes", "value"), &PS2::godot_save_bytes);
 	ClassDB::bind_method(D_METHOD("godot_load_bytes", "bytes"), &PS2::godot_load_bytes);
 	ClassDB::bind_method(D_METHOD("move_6dof", "node", "ax", "ay", "az", "pitch", "yaw", "roll", "speed"), &PS2::move_6dof);

@@ -716,6 +716,43 @@ public:
 		(void)p_off;
 		return 0;
 	}
+	// Split screen on the PS2: count views (2: top and bottom halves, 3-4:
+	// quarters), each drawn from its Camera3D. 0 or 1 goes back to one view.
+	bool set_views(int p_count, const Variant &p_cam0 = Variant(), const Variant &p_cam1 = Variant(),
+			const Variant &p_cam2 = Variant(), const Variant &p_cam3 = Variant()) {
+		_fail_ps2();
+		(void)p_count;
+		(void)p_cam0;
+		(void)p_cam1;
+		(void)p_cam2;
+		(void)p_cam3;
+		return false;
+	}
+	// Every pad, for local multiplayer: pad 0 is player 1, then a multitap's
+	// other slots, then port 2. Buttons by name: cross circle square triangle
+	// l1 r1 l2 r2 l3 r3 start select up down left right.
+	int pad_count() const {
+		_fail_ps2();
+		return 0;
+	}
+	bool pad_pressed(int p_pad, const String &p_button) const {
+		_fail_ps2();
+		(void)p_pad;
+		(void)p_button;
+		return false;
+	}
+	bool pad_just_pressed(int p_pad, const String &p_button) const {
+		_fail_ps2();
+		(void)p_pad;
+		(void)p_button;
+		return false;
+	}
+	// Steering for one pad: -1 left .. 1 right (d-pad, else the left stick).
+	float pad_axis(int p_pad) const {
+		_fail_ps2();
+		(void)p_pad;
+		return 0.0f;
+	}
 	// GS distance fog on the PS2: colour, then linear from near to far view
 	// depth. No arguments (or far <= near) turns it off.
 	bool set_fog(const Color &p_color = Color(), float p_near = 0.0f, float p_far = 0.0f) {

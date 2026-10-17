@@ -353,6 +353,11 @@ static const NativeSig kPS2[] = {
 	{ "save_slot", GN_PS2_SAVE_SLOT, 1, 1 },
 	{ "load_slot", GN_PS2_LOAD_SLOT, 1, 1 },
 	{ "memcard_present", GN_PS2_MEMCARD_PRESENT, 0, 0 },
+	{ "set_views", GN_PS2_SET_VIEWS, 1, 5 },
+	{ "pad_count", GN_PS2_PAD_COUNT, 0, 0 },
+	{ "pad_pressed", GN_PS2_PAD_PRESSED, 2, 2 },
+	{ "pad_just_pressed", GN_PS2_PAD_JUST_PRESSED, 2, 2 },
+	{ "pad_axis", GN_PS2_PAD_AXIS, 1, 1 },
 };
 
 static const NativeSig *find_sig(const NativeSig *p_table, int p_n, const String &p_name) {

@@ -334,6 +334,8 @@ static const char *kUnsupportedCalls[] = {
 static bool is_ps2_alias(const String &p_name) {
 	return p_name == "set_rumble" || p_name == "stop_rumble" || p_name == "get_pressure" ||
 			p_name == "play_sfx" || p_name == "stop_sfx" || p_name == "swap_pack" || p_name == "set_fog" ||
+			p_name == "set_views" || p_name == "pad_count" || p_name == "pad_pressed" ||
+			p_name == "pad_just_pressed" || p_name == "pad_axis" ||
 			p_name == "load_scene" || p_name == "unload_scene" || p_name == "get_abi" ||
 			p_name == "is_ready" || p_name == "get_display_width" || p_name == "get_display_height" ||
 			p_name == "memcard_present" || p_name == "memcard_ready" || p_name == "memcard_save" ||
