@@ -108,32 +108,53 @@ void N64FlavorEditorPlugin::_refresh() {
 }
 
 void N64FlavorEditorPlugin::_notification(int p_what) {
-	if (p_what == NOTIFICATION_PROCESS && dock) {
-		const bool enabled = ProjectSettings::get_singleton() && bool(ProjectSettings::get_singleton()->get("n64/enabled"));
-		if (enabled != last_enabled) {
+	switch (p_what) {
+		case NOTIFICATION_ENTER_TREE: {
+			// Only the plugin the editor adds enters the tree; instances ClassDB
+			// creates for docs do not, so they never build a dock.
+			const bool headless = DisplayServer::get_singleton() && String(DisplayServer::get_singleton()->get_name()) == "headless";
+			if (headless || dock) {
+				break;
+			}
+			dock = memnew(VBoxContainer);
+			status = memnew(Label);
+			status->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+			dock->add_child(status);
+			add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock);
+			set_process(true);
 			_refresh();
-		}
+		} break;
+		case NOTIFICATION_EXIT_TREE: {
+			if (!dock) {
+				break;
+			}
+			set_process(false);
+			// Removing a dock does not free it.
+			remove_control_from_docks(dock);
+			memdelete(dock);
+			dock = nullptr;
+			status = nullptr;
+		} break;
+		case NOTIFICATION_PROCESS: {
+			if (!dock) {
+				break;
+			}
+			const bool enabled = ProjectSettings::get_singleton() && bool(ProjectSettings::get_singleton()->get("n64/enabled"));
+			if (enabled != last_enabled) {
+				_refresh();
+			}
+		} break;
 	}
 }
 
 N64FlavorEditorPlugin::N64FlavorEditorPlugin() {
-	const bool headless = DisplayServer::get_singleton() && String(DisplayServer::get_singleton()->get_name()) == "headless";
-	if (!headless) {
-		dock = memnew(VBoxContainer);
-		status = memnew(Label);
-		status->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
-		dock->add_child(status);
-		add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock);
-		set_process(true);
-	}
-	if (!headless) {
-		_refresh();
-	}
 }
 
 N64FlavorEditorPlugin::~N64FlavorEditorPlugin() {
+	// NOTIFICATION_EXIT_TREE normally frees the dock; this covers a plugin
+	// destroyed without leaving the tree.
 	if (dock) {
-		remove_control_from_docks(dock);
+		memdelete(dock);
 		dock = nullptr;
 	}
 }

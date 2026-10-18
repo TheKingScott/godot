@@ -507,42 +507,64 @@ void PS1FlavorEditorPlugin::_refresh() {
 }
 
 void PS1FlavorEditorPlugin::_notification(int p_what) {
-	if (p_what == NOTIFICATION_PROCESS && dock) {
-		Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
-		const ObjectID id = root ? root->get_instance_id() : ObjectID();
-		int nodes = 0, tris = 0, sprites = 0, hud = 0, tiles = 0;
-		_count_scene(root, nodes, tris, sprites, hud, tiles);
-		const bool enabled = ProjectSettings::get_singleton() && bool(ProjectSettings::get_singleton()->get("ps1/enabled"));
-		if (id != last_root || nodes != last_nodes || enabled != last_enabled) {
-			last_root = id;
-			last_nodes = nodes;
+	switch (p_what) {
+		case NOTIFICATION_ENTER_TREE: {
+			// Only the plugin the editor adds enters the tree; instances ClassDB
+			// creates for docs do not, so they never build a dock.
+			const bool headless = DisplayServer::get_singleton() && String(DisplayServer::get_singleton()->get_name()) == "headless";
+			if (headless || dock) {
+				break;
+			}
+			dock = memnew(VBoxContainer);
+			status = memnew(Label);
+			status->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+			dock->add_child(status);
+			warn = memnew(Label);
+			warn->add_theme_color_override("font_color", Color(1, 0.35f, 0.35f));
+			warn->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+			dock->add_child(warn);
+			add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock);
+			set_process(true);
 			_refresh();
-		}
+		} break;
+		case NOTIFICATION_EXIT_TREE: {
+			if (!dock) {
+				break;
+			}
+			set_process(false);
+			// Removing a dock does not free it.
+			remove_control_from_docks(dock);
+			memdelete(dock);
+			dock = nullptr;
+			status = nullptr;
+			warn = nullptr;
+		} break;
+		case NOTIFICATION_PROCESS: {
+			if (!dock) {
+				break;
+			}
+			Node *root = EditorInterface::get_singleton() ? EditorInterface::get_singleton()->get_edited_scene_root() : nullptr;
+			const ObjectID id = root ? root->get_instance_id() : ObjectID();
+			int nodes = 0, tris = 0, sprites = 0, hud = 0, tiles = 0;
+			_count_scene(root, nodes, tris, sprites, hud, tiles);
+			const bool enabled = ProjectSettings::get_singleton() && bool(ProjectSettings::get_singleton()->get("ps1/enabled"));
+			if (id != last_root || nodes != last_nodes || enabled != last_enabled) {
+				last_root = id;
+				last_nodes = nodes;
+				_refresh();
+			}
+		} break;
 	}
 }
 
 PS1FlavorEditorPlugin::PS1FlavorEditorPlugin() {
-	const bool headless = DisplayServer::get_singleton() && String(DisplayServer::get_singleton()->get_name()) == "headless";
-	if (!headless) {
-		dock = memnew(VBoxContainer);
-		status = memnew(Label);
-		status->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
-		dock->add_child(status);
-		warn = memnew(Label);
-		warn->add_theme_color_override("font_color", Color(1, 0.35f, 0.35f));
-		warn->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
-		dock->add_child(warn);
-		add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock);
-		set_process(true);
-	}
-	if (!headless) {
-		_refresh();
-	}
 }
 
 PS1FlavorEditorPlugin::~PS1FlavorEditorPlugin() {
+	// NOTIFICATION_EXIT_TREE normally frees the dock; this covers a plugin
+	// destroyed without leaving the tree.
 	if (dock) {
-		remove_control_from_docks(dock);
+		memdelete(dock);
 		dock = nullptr;
 	}
 }
