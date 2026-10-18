@@ -244,6 +244,12 @@ struct Gather {
 	HashSet<int> inst_src;
 	// Nodes whose material has Disable Fog. MESH trailer 'NFOG'.
 	HashSet<int> nofog;
+	// Nodes whose material has a Render Priority, for a renderer without a
+	// depth buffer (the PS1): negative, a ground layer drawn first (lowest
+	// first); positive, a decal sorted a little nearer than its depth (5 cm
+	// a step) so it stays on the surface under it. MESH trailer 'LAYR',
+	// after NFOG.
+	HashMap<int, int> layer;
 	struct TileRow {
 		int16_t x = 0;
 		int16_t y = 0;
@@ -920,6 +926,13 @@ static void emit_mesh(Gather &r_g, const Ref<Mesh> &p_mesh, const Transform3D &p
 		const Ref<BaseMaterial3D> bm = mat;
 		if (bm.is_valid() && bm->get_flag(BaseMaterial3D::FLAG_DISABLE_FOG)) {
 			r_g.nofog.insert(p_my);
+		}
+		if (mat.is_valid() && mat->get_render_priority() != 0) {
+			// a node's surfaces disagreeing: the lowest wins
+			const int pri = mat->get_render_priority();
+			if (!r_g.layer.has(p_my) || pri < r_g.layer[p_my]) {
+				r_g.layer[p_my] = pri;
+			}
 		}
 		Color base;
 		Color emit;
@@ -1979,6 +1992,20 @@ static void append_mesh_extras(const Gather &p_g, MeshBlob &r_mesh) {
 		}
 		if (p_g.nofog.size() & 1) {
 			append_u16(o, 0);
+		}
+	}
+	if (!p_g.layer.is_empty()) {
+		// u16 node, s16 render priority for each; guests that
+		// draw with a depth buffer stop at it (an unknown section ends the
+		// trailer), so it goes last
+		o.push_back('L');
+		o.push_back('A');
+		o.push_back('Y');
+		o.push_back('R');
+		append_u32(o, uint32_t(p_g.layer.size()));
+		for (const KeyValue<int, int> &kv : p_g.layer) {
+			append_u16(o, uint16_t(kv.key));
+			append_u16(o, uint16_t(int16_t(kv.value)));
 		}
 	}
 }
